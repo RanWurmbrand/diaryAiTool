@@ -1,9 +1,10 @@
 import openpyxl
 from openpyxl import Workbook
-from openpyxl.styles import Font
+from openpyxl.styles import Font,Border, Side,Alignment
 from openpyxl.cell.rich_text import TextBlock, CellRichText
 from openpyxl.cell.text import InlineFont
 from openpyxl.worksheet.datavalidation import DataValidation
+from openpyxl.utils import range_boundaries
 import os
 
 header_txt = "Intern Instructions: The work diary is meant to help you track your progress over the summer, reflect on your accomplishments, and support conversations with your manager, team buddy, or mentor. It will also serve as a\n helpful reference when you complete a competency document later in your internship. Please remove examples below and fill in your own entries weekly, this should take no more than 15 minutes each week."
@@ -25,6 +26,13 @@ text_color_pallet = {
     "blue":   "0000FF",
     "green":  "00FF00" 
 }
+
+bold_border =Border(
+    left = Side(style='thick'),
+    right =Side(style='thick'),
+    top= Side(style='thick'),
+    bottom= Side(style='thick')
+)
 def is_xlsx_exist(path):
     if not path.endswith(".xlsx"):
         return False
@@ -46,9 +54,9 @@ class XlsxTool:
             # Create new workbook only if file doesn't exist
             self.wb = Workbook()
     
+
     def save_file(self):
         self.wb.save(self.fName)
-
     
     def create_file(self,file_name,max_width = None):
         file_path = f"{files_path}/{file_name}"
@@ -57,14 +65,20 @@ class XlsxTool:
             return None
         else:
             os.makedirs(files_path, exist_ok=True)  # Create directory if it doesn't exist
-            self.wb.save(file_path)
-        
+
+
+    def change_row_size(self,row_num,size = 0):
+        if size <= 0:
+            print("invalid size")
+            return
+        ws = self.wb.active
+        ws.row_dimensions[row_num].height = size
 
 
     def add_text(self,text,row,col):
         ws = self.wb.active
         ws.cell(row=row, column= col,value=text)
-        self.wb.save(self.fName)
+
 
 
     def add_write_bold_text(self,text,row,col):
@@ -72,7 +86,6 @@ class XlsxTool:
         ws = self.wb.active
         cell = ws.cell(row=row, column= col,value=text)
         cell.font = bold_font
-        self.save_file()
 
 
     def add_colored_text(self,text,row,col,color):
@@ -84,7 +97,7 @@ class XlsxTool:
         ws = self.wb.active
         cell = ws.cell(row=row, column= col,value=text)
         cell.font = color_font
-        self.save_file()
+
 
 
     def add_two_colored_text_sections(self,row,col,first_color,first_text,second_color,second_text):
@@ -103,7 +116,7 @@ class XlsxTool:
         rich_text = CellRichText(first_section,second_section)
         ws = self.wb.active
         cell = ws.cell(row=row, column=col, value=rich_text) 
-        self.save_file()
+
 
 
 
@@ -129,8 +142,6 @@ class XlsxTool:
         rich_text = CellRichText(first_section,second_section,third_section)
         ws = self.wb.active
         cell = ws.cell(row=row, column=col, value=rich_text) 
-        self.save_file()
-
 
 
 
@@ -141,7 +152,7 @@ class XlsxTool:
         cell = ws.cell(row=row,column=col,value=placeholder)
         cell.hyperlink = link
         cell.font =Font(color=text_color_pallet["blue"],underline="single")
-        self.save_file()
+
 
 
     def add_options_cell(self,row,col,options):
@@ -156,19 +167,53 @@ class XlsxTool:
         cell = ws.cell(row=row,column = col)
         dv.add(cell)
         cell.value=options[0]
-        self.save_file()
+
 
     
-    def add_sorting_cell(self,row,col):
-        pass
+    # def add_sorting_cell(self,row,col):
+    #     pass
 
 
-    def add_merged_row(self,start,end):
-        pass
+    def make_cell_bold(self,row,col):
+        if row < 0 or col < 0:
+            print("invalid input")
+        
+        ws = self.wb.active
+        ws = self.wb.active
+        cell = ws.cell(row= row, column = col)
+        cell.border = bold_border
 
-    def add_partial_merged_row(self):
-        pass
-    
+    def merged_cells(self,start_row,start_col,end_row,end_col):
+        if start_row < 0 or start_col < 0 or end_row < start_row or end_col < start_col:
+            print("invalid input!")
+            return
+        ws = self.wb.active
+        ws.merge_cells(start_row = start_row, start_column = start_col, end_row = end_row,end_column = end_col)
+        
+    def make_mereged_cells_bold(self,start_row,start_col):
+        ws = self.wb.active
+        cell_coord = ws.cell(row=start_row,column= start_col).coordinate
+        cell_coord_str = str(cell_coord)
+        merged_range_str = ""
+        for merged_range in ws.merged_cells.ranges:
+            print(merged_range,cell_coord)
+            if cell_coord in merged_range:
+                merged_range_str =str(merged_range)
+                break
+        if merged_range_str == "":
+            print("cell are not mereged")
+            return
+        min_col, min_row, max_col, max_row = range_boundaries(merged_range_str)
+        
+        for row in range(min_row, max_row + 1):
+            for col in range(min_col, max_col + 1):
+                ws.cell(row=row, column=col).border = bold_border
+                
+    def add_divided_merged_cells(self,start_row,start_col,mereged_size,num_of_cells):
+        for i in range(num_of_cells):
+            self.merged_cells(start_row,start_col,(start_row + i*mereged_size),start_col + mereged_size)
+
+
     def dye_row(self,row_num,row_width):
         pass
 
@@ -180,14 +225,27 @@ class XlsxTool:
         pass
     
 
-
+    # TODO safty check that we dont override existing data 
     def add_matrix(self,start_row,start_col,width,height):
-        pass
-    
+        for i in range(height + 1):
+            for j in range(width + 1):
+                self.make_cell_bold(start_row + i, start_col + j)
+
     def add_titled_matrix(self,start_row,start_col,width,height,row_titles,col_titles):
         pass
+
     def add_side_titled_matrix(self,start_row,start_col,width,height,titles):
-        pass
+        self.add_matrix(start_row,start_col,width,height)
+        ws = self.wb.active
+        n = min(height + 1, len(titles))
+        for i in range(n):
+            cell = ws.cell(row= start_row + i,column = start_col,value =titles[i])
+            cell.alignment = Alignment(horizontal='center', vertical='center')
 
     def add_top_titled_matrix(self,start_row,start_col,width,height,titles):
-        pass
+        self.add_matrix(start_row,start_col,width,height)
+        ws = self.wb.active
+        n = min(width + 1, len(titles))
+        for i in range(n):
+            cell = ws.cell(row= start_row,column = start_col + i,value =titles[i])
+            cell.alignment = Alignment(horizontal='center', vertical='center')
